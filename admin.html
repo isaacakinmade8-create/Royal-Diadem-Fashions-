@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Royal Diadem — Admin</title>
+<link rel="icon" href="assets/favicon.ico">
+<style>
+:root{--purple:#2a0b3d;--gold:#c9a24b;--line:#e6dfd0;--bg:#fbf7ef}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:#1d1422}
+header{background:var(--purple);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 20px}
+header img{width:44px;height:44px;border-radius:50%;border:1px solid var(--gold)}header b{letter-spacing:2px;flex:1}header a.btn{text-decoration:none;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:20px}
+button,input,select,textarea{font:inherit}
+.btn{background:var(--purple);color:#fff;border:0;padding:10px 16px;cursor:pointer;font-weight:700}
+.btn{transition:transform .15s,box-shadow .2s,background .2s,filter .2s}.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 18px rgba(42,11,61,.25);filter:brightness(1.15)}.btn.alt:hover:not(:disabled){background:var(--purple);color:#fff;filter:none}.btn:active:not(:disabled){transform:translateY(1px) scale(.96);box-shadow:none}.btn:focus-visible,.row select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}.btn:disabled{opacity:.6;cursor:wait}
+.btn.alt{background:#fff;color:var(--purple);border:1px solid var(--purple)}.btn.del{background:#a12b2b}
+.tabs{display:flex;gap:8px;margin-bottom:18px}.tabs .btn{opacity:.6}.tabs .btn.on{opacity:1}
+.card{background:#fff;border:1px solid var(--line);padding:18px;margin-bottom:18px}
+form.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+label{display:grid;gap:5px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+input,select,textarea{padding:10px;border:1px solid var(--line);text-transform:none;letter-spacing:0;width:100%}
+.row{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.row img{width:56px;height:56px;object-fit:cover;background:#eee}.row .grow{flex:1;min-width:0}
+.row small{color:#6f6474;display:block}.tag{font-size:11px;background:#eee;padding:2px 8px}
+#login{max-width:360px;margin:12vh auto;display:grid;gap:12px}
+#msg{padding:10px;margin-bottom:12px;display:none;background:#fff3cd}
+.hide{display:none!important}
+@media(max-width:640px){form.grid{grid-template-columns:1fr}.row{flex-wrap:wrap}}
+</style></head><body>
+<header><img src="assets/royal-diadem-icon.png" alt=""><b>ROYAL DIADEM ADMIN</b><a class="btn alt" href="index.html">← Back to website</a><button class="btn alt hide" id="logout">Log out</button></header>
+<main>
+<div id="msg"></div>
+<form id="login" class="card"><h2 style="margin:0">Admin login</h2>
+<label>Email<input id="email" type="email" required></label><label>Password<input id="pass" type="password" required></label>
+<button class="btn">Log in</button></form>
+
+<div id="app" class="hide">
+<div class="tabs"><button class="btn on" data-t="products">Products</button><button class="btn" data-t="orders">Orders <span id="newCount"></span></button></div>
+
+<section id="products">
+<form id="pform" class="card grid"><h3 class="full" id="ptitle" style="margin:0">Add product</h3>
+<label>Name<input id="pname" required></label>
+<label>Category<select id="pcat"><option value="clothing">Clothing</option><option value="jewellery">Jewellery</option><option value="bags">Bags</option></select></label>
+<label>Price<input id="pprice" type="number" min="0" step="0.01"></label>
+<label>Availability<select id="pstock"><option value="true">In stock</option><option value="false">Sold out</option></select></label>
+<label class="full">Description<textarea id="pdesc" rows="3"></textarea></label>
+<label class="full">Image<input id="pfile" type="file" accept="image/*"></label>
+<img id="pprev" class="hide" style="width:120px;height:120px;object-fit:cover">
+<label class="full">Video (optional, MP4/WebM/MOV, max 50MB)<input id="pvid" type="file" accept="video/mp4,video/webm,video/quicktime"></label>
+<div class="full hide" id="vwrap"><video id="vprev" controls playsinline style="max-width:260px;max-height:200px"></video><br><button type="button" class="btn alt" id="vremove">Remove video</button></div>
+<div class="full"><button class="btn" id="psave">Save product</button> <button type="button" class="btn alt hide" id="pcancel">Cancel edit</button></div></form>
+<div class="card" id="plist"></div></section>
+
+<section id="orders" class="hide"><div class="card" id="olist"></div></section>
+</div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const C=window.RD_CONFIG||{}, cur=C.CURRENCY||"£", $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const note=t=>{$("msg").textContent=t;$("msg").style.display=t?"block":"none"};
+if(!C.SUPABASE_URL||!C.SUPABASE_ANON_KEY){note("Not connected yet: add your Supabase URL and anon key to config.js, then reload.");$("login").classList.add("hide")}
+const sb=C.SUPABASE_URL?window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
+let products=[],editing=null,imageUrl=null,videoUrl=null;
+
+async function show(){const{data:{session}}=await sb.auth.getSession();
+  $("login").classList.toggle("hide",!!session);$("app").classList.toggle("hide",!session);$("logout").classList.toggle("hide",!session);
+  if(session){loadProducts();loadOrders()}}
+$("login").onsubmit=async e=>{e.preventDefault();note("");const{error}=await sb.auth.signInWithPassword({email:$("email").value,password:$("pass").value});error?note(error.message):show()};
+$("logout").onclick=async()=>{await sb.auth.signOut();show()};
+document.querySelectorAll(".tabs .btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs .btn").forEach(x=>x.classList.toggle("on",x===b));
+  ["products","orders"].forEach(t=>$(t).classList.toggle("hide",t!==b.dataset.t))});
+
+async function loadProducts(){const{data,error}=await sb.from("products").select("*").order("created_at",{ascending:false});
+  if(error)return note(error.message);products=data;
+  $("plist").innerHTML=data.length?data.map(p=>`<div class="row"><img src="${esc(p.image_url||"assets/favicon.png")}" alt=""><div class="grow"><b>${esc(p.name)}</b>
+  <small>${esc(p.category)} · ${p.price!=null?esc(cur)+Number(p.price).toLocaleString():"No price"} · ${p.in_stock?"In stock":"Sold out"}${p.video_url?" · 🎬 Video":""}</small></div>
+  <button class="btn alt" onclick="edit('${p.id}')">Edit</button><button class="btn del" onclick="del('${p.id}')">Delete</button></div>`).join(""):"<p>No products yet. Add your first one above.</p>"}
+function setVid(u){videoUrl=u;$("vwrap").classList.toggle("hide",!u);if(u)$("vprev").src=u;else $("vprev").removeAttribute("src")}
+function reset(){editing=null;imageUrl=null;setVid(null);$("pform").reset();$("ptitle").textContent="Add product";$("pprev").classList.add("hide");$("pcancel").classList.add("hide")}
+window.edit=id=>{const p=products.find(x=>x.id===id);editing=id;imageUrl=p.image_url;setVid(p.video_url);
+  $("pname").value=p.name;$("pcat").value=p.category;$("pprice").value=p.price??"";$("pdesc").value=p.description||"";$("pstock").value=String(p.in_stock);
+  $("ptitle").textContent="Edit product";$("pcancel").classList.remove("hide");if(imageUrl){$("pprev").src=imageUrl;$("pprev").classList.remove("hide")}scrollTo(0,0)};
+$("pcancel").onclick=reset;
+$("vremove").onclick=()=>{setVid(null);$("pvid").value=""};
+$("pvid").onchange=()=>{const f=$("pvid").files[0];if(!f)return;if(f.size>52428800){note("Video is over 50MB. Please compress it or use a shorter clip.");$("pvid").value="";return}note("");$("vwrap").classList.remove("hide");$("vprev").src=URL.createObjectURL(f)};
+$("pfile").onchange=()=>{const f=$("pfile").files[0];if(f){$("pprev").src=URL.createObjectURL(f);$("pprev").classList.remove("hide")}};
+window.del=async id=>{if(!confirm("Delete this product?"))return;const{error}=await sb.from("products").delete().eq("id",id);error?note(error.message):loadProducts()};
+$("pform").onsubmit=async e=>{e.preventDefault();note("");$("psave").disabled=true;
+  try{const f=$("pfile").files[0];
+    if(f){const path=Date.now()+"-"+f.name.replace(/[^a-z0-9._-]/gi,"_");
+      const up=await sb.storage.from("product-images").upload(path,f,{contentType:f.type});if(up.error)throw up.error;
+      imageUrl=sb.storage.from("product-images").getPublicUrl(path).data.publicUrl}
+    const v=$("pvid").files[0];
+    if(v){const vp=Date.now()+"-"+v.name.replace(/[^a-z0-9._-]/gi,"_");
+      const vu=await sb.storage.from("product-videos").upload(vp,v,{contentType:v.type});if(vu.error)throw vu.error;
+      videoUrl=sb.storage.from("product-videos").getPublicUrl(vp).data.publicUrl}
+    const row={name:$("pname").value.trim(),category:$("pcat").value,price:$("pprice").value===""?null:Number($("pprice").value),
+      description:$("pdesc").value.trim(),in_stock:$("pstock").value==="true",image_url:imageUrl,video_url:videoUrl};
+    const r=editing?await sb.from("products").update(row).eq("id",editing):await sb.from("products").insert(row);
+    if(r.error)throw r.error;reset();loadProducts()}catch(err){note(err.message)}$("psave").disabled=false};
+
+const statuses=["new","confirmed","paid","shipped","delivered","cancelled"];
+async function loadOrders(){const{data,error}=await sb.from("orders").select("*").order("created_at",{ascending:false});
+  if(error)return note(error.message);const n=data.filter(o=>o.status==="new").length;$("newCount").textContent=n?`(${n})`:"";
+  $("olist").innerHTML=data.length?data.map(o=>`<div class="row"><div class="grow"><b>${esc(o.product_name)}</b> × ${esc(o.quantity)}
+  <small>${esc(o.customer_name)} · ${o.price!=null?esc(cur)+(o.price*o.quantity).toLocaleString():""} · ${new Date(o.created_at).toLocaleString()}</small>
+  ${o.notes?`<small>Notes: ${esc(o.notes)}</small>`:""}</div>
+  <select onchange="setStatus('${o.id}',this.value)">${statuses.map(s=>`<option ${s===o.status?"selected":""}>${s}</option>`).join("")}</select>
+  <button class="btn del" onclick="delOrder('${o.id}')">Delete</button></div>`).join(""):"<p>No orders yet.</p>"}
+window.setStatus=async(id,s)=>{const{error}=await sb.from("orders").update({status:s}).eq("id",id);error?note(error.message):loadOrders()};
+window.delOrder=async id=>{if(!confirm("Delete this order?"))return;await sb.from("orders").delete().eq("id",id);loadOrders()};
+if(sb)show();
+</script></body></html>

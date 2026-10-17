@@ -27,14 +27,15 @@ async function loadProducts() {
   if (!sb) return;
   const { data, error } = await sb.from("products").select("*").order("created_at", { ascending: false });
   if (error || !data || !data.length) return;
+  const localJewellery = [...document.querySelectorAll("#productGrid .product-card")].filter(card => card.querySelector("img")?.getAttribute("src")?.startsWith("assets/jewellery/"));
   document.getElementById("productGrid").innerHTML = data.map(p => `
     <article class="product-card" data-category="${esc(p.category)}">
       <div class="product-image">${p.video_url ? `<video src="${esc(p.video_url)}" poster="${esc(p.image_url || "")}" controls playsinline preload="metadata"></video>` : `<img src="${esc(p.image_url || "assets/royal-diadem-showcase.jpg")}" alt="${esc(p.name)}" loading="lazy">`}</div>
       <div class="product-info"><span>${esc(catNames[p.category] || p.category)}</span><h3>${esc(p.name)}</h3>
         ${p.price != null ? `<p class="price">${esc(cur)}${Number(p.price).toLocaleString()}</p>` : ""}
-        ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
         ${p.in_stock ? `<button class="order-btn" data-id="${esc(p.id)}" data-product="${esc(p.name)}" data-price="${p.price ?? ""}">Buy now</button>` : `<button class="order-btn" disabled>Sold out</button>`}
       </div></article>`).join("");
+  localJewellery.forEach(card => document.getElementById("productGrid").appendChild(card));
   filterProducts(currentFilter);
 }
 
@@ -43,7 +44,7 @@ const modal = document.createElement("div");
 modal.className = "order-modal";
 modal.innerHTML = `<div class="pd-box"><button type="button" class="pd-close" id="pdClose" aria-label="Close">×</button>
   <div class="pd-media" id="pdMedia"></div>
-  <form class="pd-form"><span id="pdCat"></span><h3 id="pdName"></h3><p class="pd-price" id="pdPrice"></p><p class="pd-desc" id="pdDesc"></p>
+  <form class="pd-form"><span id="pdCat"></span><h3 id="pdName"></h3><p class="pd-price" id="pdPrice"></p>
     <label>Your name<input id="omName" required></label>
     <label>Quantity<input id="omQty" type="number" min="1" value="1" required></label>
     <label>Size / colour / notes<textarea id="omNotes" rows="3"></textarea></label>
@@ -61,7 +62,6 @@ function openProduct(card) {
   $m("pdCat").textContent = card.querySelector(".product-info span").textContent;
   $m("pdName").textContent = pending.name;
   $m("pdPrice").textContent = price ? price.textContent : "";
-  $m("pdDesc").textContent = card.querySelector(".desc")?.textContent || "";
   const buy = modal.querySelector(".buy-now");
   buy.disabled = pending.soldOut; buy.textContent = pending.soldOut ? "Sold out" : "Buy now";
   modal.classList.add("show");

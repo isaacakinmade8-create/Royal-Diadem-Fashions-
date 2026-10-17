@@ -27,7 +27,9 @@ async function loadProducts() {
   if (!sb) return;
   const { data, error } = await sb.from("products").select("*").order("created_at", { ascending: false });
   if (error || !data || !data.length) return;
-  const localJewellery = [...document.querySelectorAll("#productGrid .product-card")].filter(card => card.querySelector("img")?.getAttribute("src")?.startsWith("assets/jewellery/"));
+  // Keep the built-in jewellery cards only if they have not been imported into the database yet (avoids duplicates)
+  const dbImages = new Set(data.map(p => p.image_url));
+  const localJewellery = [...document.querySelectorAll("#productGrid .product-card")].filter(card => { const src = card.querySelector("img")?.getAttribute("src"); return src?.startsWith("assets/jewellery/") && !dbImages.has(src); });
   document.getElementById("productGrid").innerHTML = data.map(p => `
     <article class="product-card" data-category="${esc(p.category)}">
       <div class="product-image">${p.video_url ? `<video src="${esc(p.video_url)}" poster="${esc(p.image_url || "")}" controls playsinline preload="metadata"></video>` : `<img src="${esc(p.image_url || "assets/royal-diadem-showcase.jpg")}" alt="${esc(p.name)}" loading="lazy">`}</div>

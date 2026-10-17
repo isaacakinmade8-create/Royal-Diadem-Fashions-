@@ -18,7 +18,7 @@ form.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:
 label{display:grid;gap:5px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
 input,select,textarea{padding:10px;border:1px solid var(--line);text-transform:none;letter-spacing:0;width:100%}
 .row{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
-.row img{width:56px;height:56px;object-fit:cover;background:#eee}.row .grow{flex:1;min-width:0}
+.row img{width:72px;height:72px;object-fit:cover;background:#eee}.row .grow{flex:1;min-width:0}
 .row small{color:#6f6474;display:block}.tag{font-size:11px;background:#eee;padding:2px 8px}
 #login{max-width:360px;margin:12vh auto;display:grid;gap:12px}
 #msg{padding:10px;margin-bottom:12px;display:none;background:#fff3cd}
@@ -47,7 +47,7 @@ input,select,textarea{padding:10px;border:1px solid var(--line);text-transform:n
 <label class="full">Video (optional, MP4/WebM/MOV, max 50MB)<input id="pvid" type="file" accept="video/mp4,video/webm,video/quicktime"></label>
 <div class="full hide" id="vwrap"><video id="vprev" controls playsinline style="max-width:260px;max-height:200px"></video><br><button type="button" class="btn alt" id="vremove">Remove video</button></div>
 <div class="full"><button class="btn" id="psave">Save product</button> <button type="button" class="btn alt hide" id="pcancel">Cancel edit</button></div></form>
-<div class="card" id="plist"></div></section>
+<div class="card"><input id="psearch" placeholder="Search products by name or category…" style="margin-bottom:8px"><small id="pcount"></small><div id="plist"></div></div></section>
 
 <section id="orders" class="hide"><div class="card" id="olist"></div></section>
 </div></main>
@@ -70,10 +70,13 @@ document.querySelectorAll(".tabs .btn").forEach(b=>b.onclick=()=>{document.query
   ["products","orders"].forEach(t=>$(t).classList.toggle("hide",t!==b.dataset.t))});
 
 async function loadProducts(){const{data,error}=await sb.from("products").select("*").order("created_at",{ascending:false});
-  if(error)return note(error.message);products=data;
-  $("plist").innerHTML=data.length?data.map(p=>`<div class="row"><img src="${esc(p.image_url||"assets/favicon.png")}" alt=""><div class="grow"><b>${esc(p.name)}</b>
+  if(error)return note(error.message);products=data;renderProducts()}
+function renderProducts(){const q=($("psearch").value||"").toLowerCase().trim();
+  const data=products.filter(p=>!q||(p.name+" "+p.category).toLowerCase().includes(q));$("pcount").textContent=data.length+" of "+products.length+" products";
+  $("plist").innerHTML=data.length?data.map(p=>`<div class="row"><img src="${esc(p.image_url||"assets/favicon.png")}" alt="" loading="lazy" onerror="this.src='assets/favicon.png'"><div class="grow"><b>${esc(p.name)}</b>
   <small>${esc(p.category)} · ${p.price!=null?esc(cur)+Number(p.price).toLocaleString():"No price"} · ${p.in_stock?"In stock":"Sold out"}${p.video_url?" · 🎬 Video":""}</small></div>
   <button class="btn alt" onclick="edit('${p.id}')">Edit</button><button class="btn del" onclick="del('${p.id}')">Delete</button></div>`).join(""):"<p>No products yet. Add your first one above.</p>"}
+$("psearch").oninput=renderProducts;
 function setVid(u){videoUrl=u;$("vwrap").classList.toggle("hide",!u);if(u)$("vprev").src=u;else $("vprev").removeAttribute("src")}
 function reset(){editing=null;imageUrl=null;setVid(null);$("pform").reset();$("ptitle").textContent="Add product";$("pprev").classList.add("hide");$("pcancel").classList.add("hide")}
 window.edit=id=>{const p=products.find(x=>x.id===id);editing=id;imageUrl=p.image_url;setVid(p.video_url);
